@@ -58,7 +58,8 @@ def main():
     try:
         controller = RollerController()
         
-        """# Test speed control
+        """ use this if you have list of speeds or positions
+        # Test speed control
         speeds = [1000]  # in 0.01 rpm
         for speed in speeds:
             controller.set_speed(speed)
