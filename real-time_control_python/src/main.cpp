@@ -81,11 +81,32 @@ void moveToNormalizedPosition(int32_t targetDegrees) {
 }
 
 void processSerialCommand() {
+    inputString.trim();
     if (inputString.startsWith("SET_SPEED")) {
         int speed = inputString.substring(10).toInt(); // Skip "SET_SPEED " and convert to int
+        int speed = inputString.substring(10).toInt();
         approachSpeed = speed;  // Speed in 0.01 rpm units
         setMotorSpeed(approachSpeed);
         Serial.printf("Speed set to %.2f rpm\n", speed/100.0f);
+        Serial.printf("Speed set to %.2f rpm\n", speed / 100.0f);
+    } else if (inputString.startsWith("SET_POSITION")) {
+        targetPosition = inputString.substring(12).toInt();
+        positionMode = true;
+        roller.setMode(MODE_POS);
+        roller.setSpeed(approachSpeed);
+        roller.setPosition(targetPosition);
+        Serial.printf("Target position: %d deg\n", targetPosition / 100);
+    } else if (inputString.startsWith("SET_MODE")) {
+        String mode = inputString.substring(9);
+        mode.trim();
+        mode.toUpperCase();
+        if (mode == "POS") {
+            roller.setMode(MODE_POS);
+            positionMode = true;
+        } else if (mode == "SPEED") {
+            roller.setMode(MODE_SPEED);
+            positionMode = false;
+        }
     }
     // Clear the string for next command
     inputString = "";
