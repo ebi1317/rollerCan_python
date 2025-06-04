@@ -1,8 +1,11 @@
-"""Listens for serial commands like: SET_SPEED 1500\n
+"""Simple helper script to send serial commands to the RollerCAN driver.
 
-Parses them
+Example usage::
 
-Sends I²C commands to the RollerCAN driver"""
+    SET_SPEED 1500
+    SET_MODE POS
+    SET_POSITION 9000
+"""
 
 import serial
 import time
