@@ -84,7 +84,6 @@ void processSerialCommand() {
     inputString.trim();
     if (inputString.startsWith("SET_SPEED")) {
         int speed = inputString.substring(10).toInt(); // Skip "SET_SPEED " and convert to int
-        int speed = inputString.substring(10).toInt();
         approachSpeed = speed;  // Speed in 0.01 rpm units
         setMotorSpeed(approachSpeed);
         Serial.printf("Speed set to %.2f rpm\n", speed/100.0f);
@@ -108,7 +107,7 @@ void processSerialCommand() {
             positionMode = false;
         }
     }
-    // Clear the string for next command
+    // Clear the string for the next command
     inputString = "";
     stringComplete = false;
 }
