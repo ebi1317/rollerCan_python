@@ -25,7 +25,8 @@ class RollerController:
         
         return ""
     def set_speed(self, rpm: float) -> None:
-        speed = int(rpm * 100)  # Convert to 0.01 rpm units
+        """Set motor speed given in RPM."""
+        speed = int(rpm * 100)  # convert to 0.01 rpm units expected by firmware
         print(f"Setting speed to {rpm:.2f} rpm")
         response = self.send_command(f"SET_SPEED {speed}")
         if response:
@@ -58,6 +59,12 @@ class RollerController:
             normalized += 360
         return normalized
 
+    @staticmethod
+    def _shortest_delta(cur_deg: float, tgt_deg: float) -> float:
+        """Return signed shortest path cur→tgt in degrees (-180…+180)."""
+        return (tgt_deg - cur_deg + 540) % 360 - 180
+
+    
     def read_position(self) -> float:
         """Return current motor position in degrees."""
         response = self.send_command("GET_POSITION")
@@ -74,38 +81,33 @@ class RollerController:
         print("No response from M5Core2")
         return 0.0
 
-    def shortest_path(self, current: float, target: float) -> float:
-        """Calculate shortest rotation path between two angles."""
-        diff = target - current
-        if abs(diff) > 180:
-            # If difference is more than 180, go the other way around
-            if diff > 0:
-                diff -= 360
-            else:
-                diff += 360
-        return diff
 
-    def set_position(self, position: float, speed: float = 20.0) -> None:
-        """Move to position (0-360°) using shortest path."""
-        try:
-            current_pos = self.read_position()
-            target_pos = self.normalize_position(position)
-            
-            # Calculate shortest path
-            angle_diff = self.shortest_path(current_pos, target_pos)
-            
-            # Convert difference to centi-degrees
-            #target_steps = int(angle_diff * 100)  # Convert to centi-degrees
-            
-            print(f"Moving from {current_pos:.2f}° to {target_pos:.2f}° (diff: {angle_diff:.2f}°)")
-            
-            self.send_command("SET_MODE POSITION")
-            self.send_command(f"SET_SPEED {int(speed * 100)}")
-            self.send_command(f"SET_POSITION {angle_diff}")  # Send relative steps
-        except Exception as e:
-            print(f"Error setting position: {e}")
-   
+    def set_position(self, target_deg: float, speed: float = 20.0) -> None:
+        """
+        Rotate by only the required delta so the shaft follows the shortest path.
+        `target_deg` is the absolute desired heading (0-360°).
+        """
+        # a) read current encoder in centi-degrees 
+        cur_raw_str = self.send_command("GET_POSITION")
+        if not cur_raw_str:
+            print("No encoder feedback!"); return
+        cur_raw  = int(cur_raw_str)            # centi-deg from M5 firmware
+        cur_deg  = (cur_raw / 100.0) % 360     # normalise to 0-360
 
+        # b) compute shortest delta 
+        tgt_deg  = target_deg % 360
+        delta    = self._shortest_delta(cur_deg, tgt_deg)  # ±≤180°
+
+        # c) convert back to **absolute** target in centi-degrees 
+        tgt_raw  = cur_raw + int(round(delta * 100))
+
+        # d) push commands 
+        print(f"Move {delta:+.2f}°  (from {cur_deg:.2f}° to {tgt_deg:.2f}°)")
+        self.send_command("SET_MODE POSITION")
+        self.send_command(f"SET_SPEED {int(speed * 100)}")  # firmware expects 0.01 rpm
+        self.send_command(f"SET_POSITION {tgt_raw}")        # absolute centi-deg
+
+    
     def close(self):
         """Stop motor and close connection"""
         try:
