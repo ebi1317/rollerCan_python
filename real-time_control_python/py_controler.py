@@ -148,15 +148,15 @@ def main():
         # Test position control
         #print("\nTesting position control...")
         #controller.set_position(45, 2000)  # Move to 45 degrees at 20 rpm)
-        print("current position:", controller.read_position())
+        #print("current position:", controller.read_position())
         
         print("Motor controller initialized")
         
         print("\nAvailable commands:")
-        print("  sp <rpm> <duration>  - Set speed in RPM with optional duration in seconds")
-        print("  p <degrees>          - Move to absolute position in degrees")
-        print("  s <stop>             - stop the motor")
-        print("  e                    - Exit the program")
+        print("  sp   <rpm> <duration>  - Set speed in RPM with optional duration in seconds")
+        print("  p   <degrees> <speed>  - Move to absolute position in degrees")
+        print("  s   <stop>             - stop the motor")
+        print("  e                      - Exit the program")
         
         while True:
             try:
@@ -175,12 +175,13 @@ def main():
                     controller.set_cont_movment(speed, duration)
                     
                 elif parts[0] == "p":
-                    print("curent position:", controller.read_position())
+                    print("current position:", controller.read_position())
                     if len(parts) < 2:
                         print("Error: Position value required")
                         continue
                     position = float(parts[1])
-                    controller.set_position(position)
+                    speed = float(parts[2]) if len(parts) > 2 else 20.0  # Optional speed parameter
+                    controller.set_position(position, speed)
                 
                 elif parts[0] == "s":
                     print("Stopping motor...")
