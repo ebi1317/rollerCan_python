@@ -147,9 +147,9 @@ void setup() {
     M5.Lcd.setTextColor(WHITE);
     
     // Speed button labels
-    M5.Lcd.drawString("10", 30, 80);
-    M5.Lcd.drawString("20", 135, 80);
-    M5.Lcd.drawString("30", 240, 80);
+    M5.Lcd.drawString("100", 30, 80);
+    M5.Lcd.drawString("200", 135, 80);
+    M5.Lcd.drawString("300", 240, 80);
     
     // Position button labels
     M5.Lcd.drawString("0", 45, 130);
