@@ -40,6 +40,18 @@ class RollerController:
             except ValueError:
                 print(f"Invalid speed response: {response}")
         return 0
+    
+    
+    
+    def set_cont_movment(self, speed: int, duration: int = None) -> None:
+        # Set speed mode first
+        self.send_command("SET_MODE SPEED")
+        """Set continuous movement for a specified duration"""
+        self.set_speed(speed)
+        self.get_speed()
+        time.sleep(duration)
+        self.set_speed(0)
+
     def get_position(self) -> float:
         """Get current motor position in degrees"""
         response = self.send_command("GET_POSITION")
@@ -49,67 +61,25 @@ class RollerController:
             except ValueError:
                 print(f"Invalid position response: {response}")
         return 0.0
-    def set_cont_movment(self, speed: int, duration: int = None) -> None:
-        """Set continuous movement for a specified duration"""
-        self.set_speed(speed)
-        self.get_speed()
-        time.sleep(duration)
-        self.set_speed(0)
-
+    
     def normalize_position(self, position: int) -> int:
-        """Normalize position to 0-360 degrees range"""
-        return position % 36000  # 36000 = 360 degrees * 100 (internal units)
-
+        """Wrap any angle to the canonical 0-360 ° range."""
+        return position % 360
+    
     def shortest_path_distance(self, current: int, target: int) -> int:
-        """Calculate shortest path between two angles"""
-        diff = target - current
-        if abs(diff) > 18000:  # If difference > 180 degrees
-            if diff > 0:
-                diff -= 36000
-            else:
-                diff += 36000
-        return diff
+        return ((target - current + 540) % 360) - 180   # standard formula :contentReference[oaicite:1]{index=1}
 
-    def set_position(self, position: float, speed: int) -> None:
-        """Set position in degrees using shortest path
-        Args:
-            position (float): Target position in degrees
-            speed (int): Speed in 0.01 rpm units
-        """
-        # Convert degrees to internal units (hundredths of degrees)
-        target_degrees = int(position * 100)
-        current_position = self.get_position() * 100  # Convert to internal units
         
-        # Normalize positions to 0-360 range
-        current_normalized = self.normalize_position(int(current_position))
-        target_normalized = self.normalize_position(target_degrees)
-        
-        # Calculate shortest path
-        distance = self.shortest_path_distance(current_normalized, target_normalized)
-        
-        # Calculate absolute position based on current position
-        base_turns = (int(current_position) // 36000) * 36000  # Get complete rotations
-        target_position = base_turns + target_normalized
-        
-        # Adjust target if shortest path requires crossing 0/360 boundary
-        if distance < 0:
-            target_position -= 36000
-        
-        # Set position mode and move
-        response = self.send_command("SET_MODE POS")
-        if not response:
-            print("Warning: No response from SET_MODE command")
-        
-        response = self.send_command(f"SET_SPEED {speed}")
-        if not response:
-            print("Warning: No response from SET_SPEED command")
-        
-        print(f"Moving to position: {position} degrees (internal units: {target_position})")
-        response = self.send_command(f"SET_POSITION {target_position}")
-        if response:
-            print(f"Response: {response}")
-        
-        time.sleep(3)  # Wait for movement to complete
+
+    def set_position(self, position: float, speed: int = 2000) -> None:
+        """Move to absolute *position* in the shortest direction."""
+        current = self.get_position()                   # value in degrees
+        delta   = self.shortest_path_distance(current, position)
+        target  = current + delta                       # absolute goal
+
+        self.send_command("SET_MODE POSITION")
+        self.send_command(f"SET_SPEED {speed}")         # integer RPM
+        self.send_command(f"SET_POSITION {int(target * 100)}")
     
    
 
@@ -138,17 +108,70 @@ def main():
         
 
         # Test basic communication
-        print("Testing communication...")
+        #print("Testing communication...")
         print("Current speed:", controller.send_command("GET_SPEED"))
-        print("Current position:", controller.send_command("GET_POSITION"))
+        print("Current position:", controller.get_position())
         
         # Test speed control
         #print("\nTesting speed control...")
-        #controller.set_cont_movment(2000, 2)  # Move at 20 rpm for 2 seconds
+        #controller.set_cont_movment(20000, 2)  # Move at 20 rpm for 2 seconds
         
         # Test position control
-        print("\nTesting position control...")
-        controller.set_position(0, 2000)  # Move to 45 degrees at 20 rpm
+        #print("\nTesting position control...")
+        #controller.set_position(45, 2000)  # Move to 45 degrees at 20 rpm)
+        
+        
+        print("Motor controller initialized")
+        
+        print("\nAvailable commands:")
+        print("  speed <rpm> <duration>  - Set speed in RPM with optional duration in seconds")
+        print("  position <degrees>      - Move to absolute position in degrees")
+        print("  stop <stop>      - stop the motor")
+        print("  exit                    - Exit the program")
+        
+        while True:
+            try:
+                command = input("\nEnter command: ")
+                parts = command.strip().split()
+                
+                if not parts:
+                    continue
+                    
+                if parts[0] == "speed":
+                    if len(parts) < 2:
+                        print("Error: Speed value required")
+                        continue
+                    speed = float(parts[1])  # Use float for RPM input
+                    duration = float(parts[2]) if len(parts) > 2 else None
+                    controller.set_cont_movment(speed, duration)
+                    
+                elif parts[0] == "position":
+                    if len(parts) < 2:
+                        print("Error: Position value required")
+                        continue
+                    position = float(parts[1])
+                    controller.set_position(position, 2000)
+                
+                elif parts[0] == "stop":
+                    print("Stopping motor...")
+                    controller.set_speed(0)
+                    
+                elif parts[0] == "exit":
+                    print("Exiting...")
+                    break
+                    
+                else:
+                    print("Invalid command")
+                    
+            except ValueError as e:
+                print(f"Error: Invalid number format - {e}")
+            except Exception as e:
+                print(f"Error: {e}")
+                
+    except serial.SerialException as e:
+        print(f"Failed to connect to motor controller: {e}")
+    
+        
 
     finally:
         controller.close()
