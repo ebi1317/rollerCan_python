@@ -22,6 +22,7 @@ class RollerController:
         time.sleep(self.wait_time)
         if self.serial.in_waiting:
             return self.serial.readline().decode().strip()
+        
         return ""
     def set_speed(self, rpm: float) -> None:
         speed = int(rpm * 100)  # Convert to 0.01 rpm units
@@ -40,9 +41,7 @@ class RollerController:
             except ValueError:
                 print(f"Invalid speed response: {response}")
         return 0
-    
-    
-    
+       
     def set_cont_movment(self, speed: int, duration: int = None) -> None:
         # Set speed mode first
         self.send_command("SET_MODE SPEED")
@@ -52,27 +51,59 @@ class RollerController:
         time.sleep(duration)
         self.set_speed(0)
 
-    def get_position(self, normalized: bool = True) -> float:
+    def normalize_position(self, position: float) -> float:
+        """Normalize position to 0-360 degree range."""
+        normalized = position % 360
+        if normalized < 0:
+            normalized += 360
+        return normalized
+
+    def read_position(self) -> float:
         """Return current motor position in degrees."""
         response = self.send_command("GET_POSITION")
         if response:
             try:
-                degrees = int(response) / 100.0  # hundredths of a degree
-                return degrees % 360.0 if normalized else degrees
+                pos = int(response) / 100.0  # convert centi-degrees to degrees
+                print(f"Motor position: {pos:.2f}°")
+                normalized_pos = self.normalize_position(pos)
+                print(f"Normalized position: {normalized_pos:.2f}°")
+                return normalized_pos
             except ValueError:
-                print(f"Invalid position response: {response}")
+                print("Invalid response:", response)
+                return 0.0
+        print("No response from M5Core2")
         return 0.0
-    
-    def set_position(self, position: float, speed: float = 20.0) -> None:
-        """Move to *position* (0–360°) in the shortest direction."""
-        position = position % 360.0
-        current = self.get_position()  # value in degrees
-        delta = ((position - current + 540) % 360) - 180
-        target = current + delta
 
-        self.send_command("SET_MODE POSITION")
-        self.send_command(f"SET_SPEED {int(speed * 100)}")
-        self.send_command(f"SET_POSITION {int(target * 100)}")
+    def shortest_path(self, current: float, target: float) -> float:
+        """Calculate shortest rotation path between two angles."""
+        diff = target - current
+        if abs(diff) > 180:
+            # If difference is more than 180, go the other way around
+            if diff > 0:
+                diff -= 360
+            else:
+                diff += 360
+        return diff
+
+    def set_position(self, position: float, speed: float = 20.0) -> None:
+        """Move to position (0-360°) using shortest path."""
+        try:
+            current_pos = self.read_position()
+            target_pos = self.normalize_position(position)
+            
+            # Calculate shortest path
+            angle_diff = self.shortest_path(current_pos, target_pos)
+            
+            # Convert difference to centi-degrees
+            #target_steps = int(angle_diff * 100)  # Convert to centi-degrees
+            
+            print(f"Moving from {current_pos:.2f}° to {target_pos:.2f}° (diff: {angle_diff:.2f}°)")
+            
+            self.send_command("SET_MODE POSITION")
+            self.send_command(f"SET_SPEED {int(speed * 100)}")
+            self.send_command(f"SET_POSITION {angle_diff}")  # Send relative steps
+        except Exception as e:
+            print(f"Error setting position: {e}")
    
 
     def close(self):
@@ -115,14 +146,14 @@ def main():
         # Test position control
         #print("\nTesting position control...")
         #controller.set_position(45, 2000)  # Move to 45 degrees at 20 rpm)
-        
+        print("current position:", controller.read_position())
         
         print("Motor controller initialized")
         
         print("\nAvailable commands:")
         print("  sp <rpm> <duration>  - Set speed in RPM with optional duration in seconds")
-        print("  p <degrees>      - Move to absolute position in degrees")
-        print("  s <stop>      - stop the motor")
+        print("  p <degrees>          - Move to absolute position in degrees")
+        print("  s <stop>             - stop the motor")
         print("  e                    - Exit the program")
         
         while True:
@@ -142,7 +173,7 @@ def main():
                     controller.set_cont_movment(speed, duration)
                     
                 elif parts[0] == "p":
-                    print("curent position:", controller.get_position())
+                    print("curent position:", controller.read_position())
                     if len(parts) < 2:
                         print("Error: Position value required")
                         continue
@@ -152,6 +183,7 @@ def main():
                 elif parts[0] == "s":
                     print("Stopping motor...")
                     controller.set_speed(0)
+                    print("curent position:", controller.read_position())
                     
                 elif parts[0] == "e":
                     print("Exiting...")
@@ -165,14 +197,7 @@ def main():
             except Exception as e:
                 print(f"Error: {e}")
 
-            print("Speed:", controller.send_command("GET_SPEED"))
-            print("Position:", controller.send_command("GET_POSITION"))
-            print("Current:", controller.send_command("GET_CURRENT"))
-            print("Voltage:", controller.send_command("GET_VOLTAGE"))
-            print("Temperature:", controller.send_command("GET_TEMPERATURE"))
-            print("Mode:", controller.send_command("GET_MODE"))
-            print("Status:", controller.send_command("GET_STATUS"))
-            print("ID:", controller.send_command("GET_ID"))
+            
                 
     except serial.SerialException as e:
         print(f"Failed to connect to motor controller: {e}")
